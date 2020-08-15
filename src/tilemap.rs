@@ -1,6 +1,7 @@
 use bevy::asset::{AssetLoader, HandleId, LoadState};
 use bevy::{prelude::*, sprite::TextureAtlasBuilder};
 use serde::Deserialize;
+use std::fs::File;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -101,8 +102,10 @@ impl TileMapSpawner {
         let mut texture_handles = Vec::with_capacity(tiles.size_hint().0);
 
         for tile in tiles {
+            File::open(PathBuf::from(&tile.image)).unwrap();
             let texture_handle: Handle<Texture> =
-                asset_server.load(PathBuf::from(&tile.image)).unwrap();
+                asset_server.load(dbg!(PathBuf::from(&tile.image))).unwrap();
+
             texture_handles.push(texture_handle);
         }
 
@@ -115,25 +118,39 @@ impl TileMapSpawner {
         texture_store: &mut Assets<Texture>,
         texture_atlas_store: &mut Assets<TextureAtlas>,
     ) {
+        let mut hack_remove = Vec::new();
         for (tilemap_handle, staged_textures) in self.staged_maps.iter() {
-            let all_loaded = staged_textures.iter().any(|handle| {
-                if let LoadState::Loaded(_) = dbg!(asset_server.get_load_state(*handle).unwrap()) {
-                    true
-                } else {
-                    false
+            let still_loading = staged_textures.iter().any(|handle| {
+                match asset_server.get_load_state(*handle).unwrap() {
+                    LoadState::Loaded(..) => false,
+                    LoadState::Failed(tmp) => {
+                        // TODO: find out why these fails
+                       // dbg!(*handle);
+                        false
+                    }
+                    _ => true,
                 }
             });
 
-            if all_loaded {
+            if !still_loading {
+                println!("DONE LOADING!");
                 let mut texture_atlas_builder = TextureAtlasBuilder::default();
                 for texture_handle in staged_textures.iter() {
-                    let texture = texture_store.get(texture_handle).unwrap();
-                    texture_atlas_builder.add_texture(*texture_handle, &texture);
+                    if let Some(texture) = texture_store.get(texture_handle) {
+                        println!("Added texture");
+                        texture_atlas_builder.add_texture(*texture_handle, &texture);
+                    }
+                    
                 }
                 let texture_atlas = texture_atlas_builder.finish(texture_store).unwrap();
                 let atlas_handle = texture_atlas_store.add(texture_atlas);
+                hack_remove.push(*tilemap_handle);
                 self.loaded_maps.insert(*tilemap_handle, atlas_handle);
+                println!("inserted");
             }
+        }
+        for handle in hack_remove.iter() {
+            self.staged_maps.remove(handle);
         }
     }
 }
@@ -161,6 +178,7 @@ fn tilemap_load_system(
 
     tilemap_spawner.poll_staged_maps(&asset_server, &mut texture_store, &mut texture_atlas_store);
 
+    // this introduces hard to find bugs
     let loaded_maps = std::mem::replace(&mut tilemap_spawner.loaded_maps, HashMap::new());
 
     let mut hack = Vec::new();
@@ -169,7 +187,7 @@ fn tilemap_load_system(
         .to_be_spawned
         .iter()
         .filter(|&handle| {
-            if tilemap_spawner.is_loaded(*handle) {
+            if loaded_maps.contains_key(handle) {
                 println!("LOADED");
                 true
             } else {
