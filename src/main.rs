@@ -1,6 +1,6 @@
 use bevy::{
     asset::AssetPlugin,
-    diagnostic::DiagnosticsPlugin,
+    diagnostic::{FrameTimeDiagnosticsPlugin, DiagnosticsPlugin, PrintDiagnosticsPlugin},
     input::keyboard::KeyboardInput,
     prelude::*,
     render::{
@@ -65,9 +65,9 @@ fn create_world(
         .with(Enemy)
         .with(Health(100));
 
-    let tilemap: Handle<TileMap> = asset_server.load("assets/scenes/test.json").unwrap();
+    let tilemap: Handle<TileMap> = asset_server.load("assets/newmap.json").unwrap();
 
-    tile_maps.spawn(tilemap);
+    tile_maps.spawn(tilemap, 0);
     //let map: Handle<TileMap> = asset_server.load("assets/scenes/test.json").unwrap();
     println!("Done");
 }
@@ -144,6 +144,9 @@ fn create_camera(mut commands: Commands) {
 mod tilemap;
 
 fn main() {
+
+    env_logger::init();
+
     App::build()
         .add_default_plugins()
         .add_plugin(TileMapPlugin)
@@ -151,6 +154,9 @@ fn main() {
         .register_component::<Health>()
         .register_component::<Player>()
         .register_component::<Enemy>()
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // Adds a system that prints diagnostics to the console
+        .add_plugin(PrintDiagnosticsPlugin::default())
         .add_startup_system(create_world.system())
         // .add_startup_system(load_world.system())
         .add_system(direct_input.thread_local_system())

@@ -68,18 +68,24 @@ impl AssetLoader<TileMap> for TileMapLoader {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct LoadedTileMap {
+    tilemap: Handle<TileMap>,
+    texture_atlas: Handle<TextureAtlas>,
+}
+
 #[derive(Default)]
 pub struct TileMapSpawner {
     loaded_maps: HashMap<Handle<TileMap>, Handle<TextureAtlas>>,
     tilemap_event_reader: EventReader<AssetEvent<TileMap>>,
-    staged_maps: HashMap<Handle<TileMap>, Vec<Handle<Texture>>>,
-    to_be_spawned: Vec<Handle<TileMap>>,
+    staged_maps: HashMap<Handle<TileMap>, Vec<(Handle<Texture>, String)>>,
+    to_be_spawned: Vec<(Handle<TileMap>, u32)>,
 }
 
 impl TileMapSpawner {
     // show layer?
-    pub fn spawn(&mut self, handle: Handle<TileMap>) {
-        self.to_be_spawned.push(handle);
+    pub fn spawn(&mut self, handle: Handle<TileMap>, layer: u32) {
+        self.to_be_spawned.push((handle, layer));
     }
 
     pub fn is_loaded(&self, handle: Handle<TileMap>) -> bool {
@@ -104,9 +110,9 @@ impl TileMapSpawner {
         for tile in tiles {
             File::open(PathBuf::from(&tile.image)).unwrap();
             let texture_handle: Handle<Texture> =
-                asset_server.load(dbg!(PathBuf::from(&tile.image))).unwrap();
+                asset_server.load(PathBuf::from(&tile.image)).unwrap();
 
-            texture_handles.push(texture_handle);
+            texture_handles.push((texture_handle, tile.image.clone()));
         }
 
         self.staged_maps.insert(handle, texture_handles);
@@ -120,12 +126,12 @@ impl TileMapSpawner {
     ) {
         let mut hack_remove = Vec::new();
         for (tilemap_handle, staged_textures) in self.staged_maps.iter() {
-            let still_loading = staged_textures.iter().any(|handle| {
+            let still_loading = staged_textures.iter().any(|(handle, path)| {
                 match asset_server.get_load_state(*handle).unwrap() {
                     LoadState::Loaded(..) => false,
                     LoadState::Failed(tmp) => {
                         // TODO: find out why these fails
-                       // dbg!(*handle);
+                  //      println!("Failed to load {}", path);
                         false
                     }
                     _ => true,
@@ -135,12 +141,10 @@ impl TileMapSpawner {
             if !still_loading {
                 println!("DONE LOADING!");
                 let mut texture_atlas_builder = TextureAtlasBuilder::default();
-                for texture_handle in staged_textures.iter() {
+                for (texture_handle, _) in staged_textures.iter() {
                     if let Some(texture) = texture_store.get(texture_handle) {
-                        println!("Added texture");
                         texture_atlas_builder.add_texture(*texture_handle, &texture);
                     }
-                    
                 }
                 let texture_atlas = texture_atlas_builder.finish(texture_store).unwrap();
                 let atlas_handle = texture_atlas_store.add(texture_atlas);
@@ -167,7 +171,7 @@ fn tilemap_load_system(
 ) {
     for event in tilemap_spawner.tilemap_event_reader.iter(&asset_events) {
         if let AssetEvent::Created { handle } | AssetEvent::Modified { handle } = event {
-            if let Some(tilemap) = tilemap_spawner.loaded_maps.get(handle) {
+            if tilemap_spawner.loaded_maps.get(handle).is_some() {
                 println!("Alredy Loaded {:?}", handle);
             } else {
                 println!("Stageing map");
@@ -186,25 +190,59 @@ fn tilemap_load_system(
     tilemap_spawner
         .to_be_spawned
         .iter()
-        .filter(|&handle| {
+        .filter(|(handle, layer)| {
             if loaded_maps.contains_key(handle) {
-                println!("LOADED");
+                //println!("LOADED");
                 true
             } else {
-                println!("NOT LOADED");
-                hack.push(*handle);
+               // println!("NOT LOADED");
+                hack.push((*handle, *layer));
                 false
             }
         })
-        .map(|handle| loaded_maps.get(&handle).unwrap())
-        .for_each(|handle| {
-            let atlas = texture_atlas_store.get(handle).unwrap();
-            println!("spawned");
-            commands.spawn(SpriteComponents {
-                material: materials.add(atlas.texture.into()),
-                translation: Vec3::new(0.0, 0., 0.0).into(),
-                ..Default::default()
-            });
+        .map(|(handle, layer)| {
+            (
+                LoadedTileMap {
+                    texture_atlas: *loaded_maps.get(handle).unwrap(),
+                    tilemap: *handle,
+                },
+                layer,
+            )
+        })
+        .for_each(|(loaded_tile_map, layer)| {
+            let atlas = texture_atlas_store
+                .get(&loaded_tile_map.texture_atlas)
+                .unwrap();
+            println!("spawned layer {}", layer);
+            let tilemap = tilemap_store.get(&loaded_tile_map.tilemap).unwrap();
+            let tileset = tilemap.tilesets.get(0).unwrap();
+            let layer = tilemap.layers.get(*layer as usize).unwrap();
+            layer
+                .data
+                .iter()
+                .filter(|&&data| data != 0)
+                .enumerate()
+                .for_each(|(i, &data)| {
+                    let index = data as i32 - tileset.firstgid;
+
+                    let handle = asset_server
+                        .get_handle(&tileset.tiles.get(index as usize).unwrap().image)
+                        .unwrap();
+                    if let Some(index) = atlas.get_texture_index(handle) {
+                        commands.spawn(SpriteSheetComponents {
+                            scale: Scale(2.0),
+                            translation: Vec3::new(
+                                (i % 10) as f32 * 50.0,
+                                (i % 10) as f32 * 10.0,
+                                0.0,
+                            )
+                            .into(),
+                            sprite: TextureAtlasSprite::new(index as u32),
+                            texture_atlas: loaded_tile_map.texture_atlas,
+                            ..Default::default()
+                        });
+                    }
+                });
         });
     tilemap_spawner.to_be_spawned = hack;
     tilemap_spawner.loaded_maps = loaded_maps;
