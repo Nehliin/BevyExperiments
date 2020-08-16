@@ -131,7 +131,7 @@ impl TileMapSpawner {
                     LoadState::Loaded(..) => false,
                     LoadState::Failed(tmp) => {
                         // TODO: find out why these fails
-                  //      println!("Failed to load {}", path);
+                        //      println!("Failed to load {}", path);
                         false
                     }
                     _ => true,
@@ -140,7 +140,8 @@ impl TileMapSpawner {
 
             if !still_loading {
                 println!("DONE LOADING!");
-                let mut texture_atlas_builder = TextureAtlasBuilder::default();
+                let mut texture_atlas_builder =
+                    TextureAtlasBuilder::new(Vec2::new(2048., 2048.), Vec2::new(16096., 16096.));
                 for (texture_handle, _) in staged_textures.iter() {
                     if let Some(texture) = texture_store.get(texture_handle) {
                         texture_atlas_builder.add_texture(*texture_handle, &texture);
@@ -195,7 +196,7 @@ fn tilemap_load_system(
                 //println!("LOADED");
                 true
             } else {
-               // println!("NOT LOADED");
+                // println!("NOT LOADED");
                 hack.push((*handle, *layer));
                 false
             }
@@ -217,32 +218,40 @@ fn tilemap_load_system(
             let tilemap = tilemap_store.get(&loaded_tile_map.tilemap).unwrap();
             let tileset = tilemap.tilesets.get(0).unwrap();
             let layer = tilemap.layers.get(*layer as usize).unwrap();
-            layer
-                .data
-                .iter()
-                .filter(|&&data| data != 0)
-                .enumerate()
-                .for_each(|(i, &data)| {
-                    let index = data as i32 - tileset.firstgid;
 
-                    let handle = asset_server
-                        .get_handle(&tileset.tiles.get(index as usize).unwrap().image)
-                        .unwrap();
-                    if let Some(index) = atlas.get_texture_index(handle) {
-                        commands.spawn(SpriteSheetComponents {
-                            scale: Scale(2.0),
-                            translation: Vec3::new(
-                                (i % 10) as f32 * 50.0,
-                                (i % 10) as f32 * 10.0,
-                                0.0,
-                            )
-                            .into(),
-                            sprite: TextureAtlasSprite::new(index as u32),
-                            texture_atlas: loaded_tile_map.texture_atlas,
-                            ..Default::default()
-                        });
+            let mut x = layer.x;
+            let mut y = layer.y;
+            for &data in layer.data.iter() {
+                let tile_gid = data as i32 - tileset.firstgid;
+
+                if tile_gid < 0 {
+                    x += tilemap.tilewidth;
+                    if x % (layer.width * tilemap.tilewidth) == 0 {
+                        x = layer.x;
+                        y += tilemap.tileheight;
                     }
+                    continue;
+                }
+                // first need to get the handle of the texture to find it in the map.
+                // kind of inconvenient...
+                let handle = asset_server
+                    .get_handle(&tileset.tiles.get(tile_gid as usize).unwrap().image)
+                    .unwrap();
+                let atlas_index = atlas.get_texture_index(handle).unwrap();
+                commands.spawn(SpriteSheetComponents {
+                    scale: Scale(1.0),
+                    translation: dbg!(Vec3::new(x as f32, y as f32, 0.0)).into(),
+                    sprite: TextureAtlasSprite::new(atlas_index as u32),
+                    texture_atlas: loaded_tile_map.texture_atlas,
+                    ..Default::default()
                 });
+
+                x += tilemap.tilewidth;
+                if x % (layer.width * tilemap.tilewidth) == 0 {
+                    x = layer.x;
+                    y += tilemap.tileheight;
+                }
+            }
         });
     tilemap_spawner.to_be_spawned = hack;
     tilemap_spawner.loaded_maps = loaded_maps;

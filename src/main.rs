@@ -1,6 +1,6 @@
 use bevy::{
     asset::AssetPlugin,
-    diagnostic::{FrameTimeDiagnosticsPlugin, DiagnosticsPlugin, PrintDiagnosticsPlugin},
+    diagnostic::{DiagnosticsPlugin, FrameTimeDiagnosticsPlugin, PrintDiagnosticsPlugin},
     input::keyboard::KeyboardInput,
     prelude::*,
     render::{
@@ -72,13 +72,6 @@ fn create_world(
     println!("Done");
 }
 
-fn test_world(mut commands: Commands) {
-    commands
-        .spawn(Camera2dComponents::default())
-        .spawn((Player, Health(100)))
-        .spawn((Enemy, Health(100)));
-}
-
 fn load_world(asset_server: Res<AssetServer>, mut scene_spawner: ResMut<SceneSpawner>) {
     let scene_handle: Handle<Scene> = asset_server.load("assets/scenes/start_scene.scn").unwrap();
 
@@ -136,28 +129,45 @@ fn print_system(mut query: Query<Entity>) {
     }
 }
 
-fn create_camera(mut commands: Commands) {
-    commands.spawn(Camera2dComponents::default());
-    // .spawn(UiCameraComponents::default());
+fn camera_movement_system(
+    mut keyboard_event_reader: ResMut<KeyboardEventReader>,
+    keyboard_events: Res<Events<KeyboardInput>>,
+    mut query: Query<(&Camera, &mut Translation)>,
+) {
+    for event in keyboard_event_reader.event_reader.iter(&keyboard_events) {
+        let mut horisontal_movement = 0.0;
+        let mut latteral_movement = 0.0;
+        match event.key_code {
+            Some(KeyCode::D) => horisontal_movement += 30.0,
+            Some(KeyCode::A) => horisontal_movement -= 30.0,
+            Some(KeyCode::W) => latteral_movement += 30.0,
+            Some(KeyCode::S) => latteral_movement -= 30.0,
+            _ => {}
+        }
+        for (_, mut translation) in &mut query.iter() {
+            *dbg!(translation.x_mut()) += horisontal_movement;
+            *dbg!(translation.y_mut()) += latteral_movement;
+        }
+    }
 }
 
 mod tilemap;
 
 fn main() {
-
     env_logger::init();
 
     App::build()
         .add_default_plugins()
         .add_plugin(TileMapPlugin)
-        //    .init_resource::<KeyboardEventReader>()
+        .init_resource::<KeyboardEventReader>()
         .register_component::<Health>()
         .register_component::<Player>()
         .register_component::<Enemy>()
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // .add_plugin(FrameTimeDiagnosticsPlugin::default())
         // Adds a system that prints diagnostics to the console
-        .add_plugin(PrintDiagnosticsPlugin::default())
+        // .add_plugin(PrintDiagnosticsPlugin::default())
         .add_startup_system(create_world.system())
+        .add_system(camera_movement_system.system())
         // .add_startup_system(load_world.system())
         .add_system(direct_input.thread_local_system())
         //.add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
