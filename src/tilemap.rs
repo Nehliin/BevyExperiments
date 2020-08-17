@@ -163,7 +163,6 @@ impl TileMapSpawner {
 fn tilemap_load_system(
     mut commands: Commands,
     asset_events: Res<Events<AssetEvent<TileMap>>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     mut texture_atlas_store: ResMut<Assets<TextureAtlas>>,
     mut tilemap_spawner: ResMut<TileMapSpawner>,
     asset_server: Res<AssetServer>,
@@ -219,16 +218,17 @@ fn tilemap_load_system(
             let tileset = tilemap.tilesets.get(0).unwrap();
             let layer = tilemap.layers.get(*layer as usize).unwrap();
 
-            let mut x = layer.x;
-            let mut y = layer.y;
+            let mut x = layer.x as f32;
+            let mut y = layer.y as f32;
+            let mut test = false;
             for &data in layer.data.iter() {
                 let tile_gid = data as i32 - tileset.firstgid;
 
                 if tile_gid < 0 {
-                    x += tilemap.tilewidth;
-                    if x % (layer.width * tilemap.tilewidth) == 0 {
-                        x = layer.x;
-                        y += tilemap.tileheight;
+                    x += tilemap.tilewidth as f32 / 2.0;
+                    if x % (layer.width as f32 * tilemap.tilewidth as f32/2.0) == 0. {
+                        x = layer.x as f32;
+                        y += tilemap.tileheight as f32;
                     }
                     continue;
                 }
@@ -238,19 +238,30 @@ fn tilemap_load_system(
                     .get_handle(&tileset.tiles.get(tile_gid as usize).unwrap().image)
                     .unwrap();
                 let atlas_index = atlas.get_texture_index(handle).unwrap();
+                let rot_y = x as f32 * 45.0_f32.sin() + y as f32 * 45.0_f32.cos();
+                let rot_x = x as f32 * 45.0_f32.cos() - y as f32 * 45.0_f32.sin();
                 commands.spawn(SpriteSheetComponents {
                     scale: Scale(1.0),
-                    translation: dbg!(Vec3::new(x as f32, y as f32, 0.0)).into(),
-                    sprite: TextureAtlasSprite::new(atlas_index as u32),
+                    // rotation: Rotation(Quat::from_rotation_x(-45.0)),
+                    translation: dbg!(Vec3::new(rot_x as f32, -(rot_y as f32), if test {0.0} else {1.0})).into(),
+                    sprite: TextureAtlasSprite {
+                        index: atlas_index as u32,
+                        color: Color::default()
+                    },
                     texture_atlas: loaded_tile_map.texture_atlas,
+                    draw: Draw {
+                        is_transparent: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 });
+                test = !test;
 
-                x += tilemap.tilewidth;
-                if x % (layer.width * tilemap.tilewidth) == 0 {
-                    x = layer.x;
-                    y += tilemap.tileheight;
-                }
+                x += tilemap.tilewidth as f32 / 2.0;
+                    if x % (layer.width as f32 * tilemap.tilewidth as f32/2.0) == 0. {
+                        x = layer.x as f32;
+                        y += tilemap.tileheight as f32;
+                    }
             }
         });
     tilemap_spawner.to_be_spawned = hack;

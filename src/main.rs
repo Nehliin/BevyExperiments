@@ -32,9 +32,9 @@ fn create_world(
         .spawn(UiCameraComponents::default())
         .spawn(SpriteComponents {
             material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
-            translation: Translation(Vec3::new(55.0, 75.0, 0.0)),
+            translation: Translation(Vec3::new(100.0, 150.0, 0.0)),
             sprite: Sprite {
-                size: Vec2::new(30.0, 50.0),
+                size: Vec2::new(40.0, 80.0),
             },
             ..Default::default()
         })
@@ -65,7 +65,7 @@ fn create_world(
         .with(Enemy)
         .with(Health(100));
 
-    let tilemap: Handle<TileMap> = asset_server.load("assets/newmap.json").unwrap();
+    let tilemap: Handle<TileMap> = asset_server.load("assets/map.json").unwrap();
 
     tile_maps.spawn(tilemap, 0);
     //let map: Handle<TileMap> = asset_server.load("assets/scenes/test.json").unwrap();
