@@ -12,7 +12,8 @@ use bevy::{
     type_registry::{TypeRegistry, TypeRegistryPlugin},
 };
 use std::{fs::File, io::Write};
-use tilemap::{TileMap, TileMapLoader, TileMapPlugin, TileMapSpawner};
+use tilemap::{TiledMapComponents, TiledMapPlugin};
+//use tilemap::{TileMap, TileMapLoader, TileMapPlugin, TileMapSpawner};
 #[derive(Properties, Default)]
 struct Player;
 #[derive(Properties, Default)]
@@ -24,7 +25,7 @@ fn create_world(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
-    mut tile_maps: ResMut<TileMapSpawner>,
+    //    mut tile_maps: ResMut<TileMapSpawner>,
 ) {
     let enemy_size = Vec2::new(40.0, 30.0);
     commands
@@ -65,9 +66,15 @@ fn create_world(
         .with(Enemy)
         .with(Health(100));
 
-    let tilemap: Handle<TileMap> = asset_server.load("assets/map.json").unwrap();
+    // let tilemap: Handle<TileMap> = asset_server.load("assets/map.json").unwrap();
 
-    tile_maps.spawn(tilemap, 0);
+    let texture_handle = asset_server.load("assets/buch-outdoor.png").unwrap();
+    commands.spawn(TiledMapComponents {
+        map_asset: asset_server.load("assets/newmap.tmx").unwrap(),
+        material: materials.add(texture_handle.into()),
+        ..Default::default()
+    });
+    //tile_maps.spawn(tilemap, 0);
     //let map: Handle<TileMap> = asset_server.load("assets/scenes/test.json").unwrap();
     println!("Done");
 }
@@ -158,7 +165,8 @@ fn main() {
 
     App::build()
         .add_default_plugins()
-        .add_plugin(TileMapPlugin)
+        .add_plugin(TiledMapPlugin)
+        // .add_plugin(TileMapPlugin)
         .init_resource::<KeyboardEventReader>()
         .register_component::<Health>()
         .register_component::<Player>()
