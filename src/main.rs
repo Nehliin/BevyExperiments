@@ -68,11 +68,10 @@ fn create_world(
 
     // let tilemap: Handle<TileMap> = asset_server.load("assets/map.json").unwrap();
 
-    let texture_handle = asset_server.load("assets/buch-outdoor.png").unwrap();
+    let texture_handle = asset_server.load("assets/iso-64x64-outside.png").unwrap();
     commands.spawn(TiledMapComponents {
-        map_asset: asset_server.load("assets/newmap.tmx").unwrap(),
+        map_asset: asset_server.load("assets/map.tmx").unwrap(),
         material: materials.add(texture_handle.into()),
-        ..Default::default()
     });
     //tile_maps.spawn(tilemap, 0);
     //let map: Handle<TileMap> = asset_server.load("assets/scenes/test.json").unwrap();

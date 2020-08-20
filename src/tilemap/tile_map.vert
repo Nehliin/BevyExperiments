@@ -21,6 +21,7 @@ layout(set = 2, binding = 1) uniform TileMapChunk {
 void main() {
     v_Uv = Vertex_Uv;
     vec3 position = Vertex_Position * vec3(5.0, 5.0, 1.0);
+   // position.xy = rotateUV(position.xy, 45.0);
     position.z = layer_id;
     gl_Position = ViewProj * Model * vec4(position, 1.0);
 }

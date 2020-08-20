@@ -1,14 +1,16 @@
+use super::{
+    map::Layer,
+    map::{Chunk, Map},
+    Tile,
+};
 use anyhow::Result;
 use bevy::{
-    prelude::Mesh,
     asset::AssetLoader,
-    render::{
-        mesh::VertexAttribute,
-        pipeline::PrimitiveTopology,
-    }, math::*,
+    math::*,
+    prelude::Mesh,
+    render::{mesh::VertexAttribute, pipeline::PrimitiveTopology},
 };
 use std::{io::BufReader, path::Path};
-use super::{map::Layer, map::{Chunk, Map}, Tile};
 
 #[derive(Default)]
 pub struct TiledMapLoader;
@@ -60,15 +62,14 @@ impl AssetLoader<Map> for TiledMapLoader {
                         for tile_y in 0..32 {
                             let lookup_x = (chunk_x * 32) + tile_x;
                             let lookup_y = (chunk_y * 32) + tile_y;
-                        
-                            // Get chunk tile.
-                            let chunk_tile = if 
-                                lookup_x < map.width as usize &&
-                                lookup_y < map.height as usize {
 
+                            // Get chunk tile.
+                            let chunk_tile = if lookup_x < map.width as usize
+                                && lookup_y < map.height as usize
+                            {
                                 // New Tiled crate code:
                                 // let map_tile = match &layer.tiles {
-                                //     tiled::LayerData::Finite(tiles) => { 
+                                //     tiled::LayerData::Finite(tiles) => {
                                 //         &tiles[lookup_y][lookup_x]
                                 //     },
                                 //     _ => panic!("Infinte maps not supported"),
@@ -77,20 +78,20 @@ impl AssetLoader<Map> for TiledMapLoader {
                                 let map_tile = layer.tiles[lookup_y][lookup_x];
 
                                 let tile = map_tile.gid;
-                                
+
                                 let tile = (Self::remove_tile_flags(tile) as f32) - 1.0; // tiled counts from 1
 
                                 // This calculation is much simpler we only care about getting the remainder
                                 // and multiplying that by the tile width.
                                 let sprite_sheet_x: f32 = (tile % columns * tile_width).floor();
-            
+
                                 // Calculation here is (tile / columns).round_down * tile_height
                                 // Example: tile 30 / 28 columns = 1.0714 rounded down to 1 * 16 tile_height = 16 Y
                                 // which is the 2nd row in the sprite sheet.
                                 // Example2: tile 10 / 28 columns = 0.3571 rounded down to 0 * 16 tile_height = 0 Y
                                 // which is the 1st row in the sprite sheet.
                                 let sprite_sheet_y: f32 = (tile / columns).floor() * tile_height;
-        
+
                                 // Calculate positions:
                                 let start_x: f32 = tile_width * (lookup_x as f32);
                                 let end_x: f32 = tile_width * ((lookup_x as f32) + 1.0);
@@ -101,19 +102,20 @@ impl AssetLoader<Map> for TiledMapLoader {
                                 let mut start_u: f32 = sprite_sheet_x / texture_width;
                                 let mut end_u: f32 = (sprite_sheet_x + tile_width) / texture_width;
                                 let mut start_v: f32 = sprite_sheet_y / texture_height;
-                                let mut end_v: f32 = (sprite_sheet_y + tile_height) / texture_height;
-            
+                                let mut end_v: f32 =
+                                    (sprite_sheet_y + tile_height) / texture_height;
+
                                 if map_tile.flip_h {
-                                    let temp_startu = start_u;
-                                    start_u = end_u;
-                                    end_u = temp_startu;
+                                    std::mem::swap(&mut start_u, &mut end_u);
                                 }
                                 if map_tile.flip_v {
-                                    let temp_startv = start_v;
-                                    start_v = end_v;
-                                    end_v = temp_startv;
+                                    std::mem::swap(&mut start_v, &mut end_v);
                                 }
-            
+                             //   let start_y2 = start_x as f32 * 45.0_f32.sin() + start_y as f32 * 45.0_f32.cos();
+                              //  let start_x2 = start_x as f32 * 45.0_f32.cos() - start_y as f32 * 45.0_f32.sin();
+                              //  let end_y2 = end_x as f32 * 45.0_f32.sin() + end_y as f32 * 45.0_f32.cos();
+                               // let end_x2 = end_x as f32 * 45.0_f32.cos() - end_y as f32 * 45.0_f32.sin();
+                              //  let rotated = dbg!(Vec4::new(start_x2, start_y2, end_x2, end_y2 ));
                                 Tile {
                                     tile_id: map_tile.gid,
                                     pos: Vec2::new(tile_x as f32, tile_y as f32),
@@ -157,12 +159,12 @@ impl AssetLoader<Map> for TiledMapLoader {
                 let chunk_x = &layer.chunks[x];
                 for y in 0..chunk_x.len() {
                     let chunk = &chunk_x[y];
-                    
+
                     let mut positions = Vec::new();
                     let mut normals = Vec::new();
                     let mut uvs = Vec::new();
                     let mut indices = Vec::new();
-                    
+
                     let mut i = 0;
                     for tile in chunk.tiles.iter().flat_map(|tiles_y| tiles_y.iter()) {
                         if tile.tile_id == 0 {
@@ -170,26 +172,30 @@ impl AssetLoader<Map> for TiledMapLoader {
                         }
 
                         // X, Y
-                        positions.push([tile.vertex.x(), tile.vertex.y(), 0.0]);
+                        let (x,y) = rotate(tile.vertex.x(), tile.vertex.y(), tile.vertex.x() - tile.vertex.y());
+                        positions.push([x, y, 0.0]);
                         normals.push([0.0, 0.0, 1.0]);
                         uvs.push([tile.uv.x(), tile.uv.w()]);
 
+                        let (x,w) = rotate(tile.vertex.x(), tile.vertex.w(), tile.vertex.x() - tile.vertex.w());
                         // X, Y + 1
-                        positions.push([tile.vertex.x(), tile.vertex.w(), 0.0]);
+                        positions.push([x, w, 0.0]);
                         normals.push([0.0, 0.0, 1.0]);
-                        uvs.push([tile.uv.x(), tile.uv.y()]);     
+                        uvs.push([tile.uv.x(), tile.uv.y()]);
 
+                        let (z,w) = rotate(tile.vertex.z(), tile.vertex.w(), tile.vertex.z() - tile.vertex.w());
                         // X + 1, Y + 1
-                        positions.push([tile.vertex.z(), tile.vertex.w(), 0.0]);
+                        positions.push([z, w, 0.0]);
                         normals.push([0.0, 0.0, 1.0]);
                         uvs.push([tile.uv.z(), tile.uv.y()]);     
 
+                        let (z,y) = rotate(tile.vertex.z(), tile.vertex.y(), tile.vertex.z() - tile.vertex.y());
                         // X + 1, Y
-                        positions.push([tile.vertex.z(), tile.vertex.y(), 0.0]);
+                        positions.push([z, y, 0.0]);
                         normals.push([0.0, 0.0, 1.0]);
-                        uvs.push([tile.uv.z(), tile.uv.w()]);    
-                    
-                        let mut new_indices = vec![i + 0, i + 2, i + 1, i + 0, i + 3, i + 2];
+                        uvs.push([tile.uv.z(), tile.uv.w()]);
+
+                        let mut new_indices = vec![i, i + 2, i + 1, i, i + 3, i + 2];
                         indices.append(&mut new_indices);
 
                         i += 4;
@@ -223,4 +229,12 @@ impl AssetLoader<Map> for TiledMapLoader {
         static EXTENSIONS: &[&str] = &["tmx"];
         EXTENSIONS
     }
+}
+
+fn rotate(x: f32, y: f32, mid: f32) -> (f32, f32) {
+    let mid = 0.0;
+    let x_rot = (-45.0_f32).cos() * (x - mid) + (-45.0_f32).sin() * (y - mid) + mid;
+    let y_rot = (-45.0_f32).cos() * (y - mid) - (-45.0_f32).sin() * (x - mid) + mid;
+
+    (x_rot, y_rot)
 }
